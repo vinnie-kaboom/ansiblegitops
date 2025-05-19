@@ -24,7 +24,6 @@ mkdir -p inventory playbooks
 ## Create an Inventory File:
 
 inventory/hosts:[webservers]
-
 localhost ansible_connection=local
 
 ## Create a Sample Playbook: playbooks/site.yml:
