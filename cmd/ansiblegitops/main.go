@@ -17,7 +17,6 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
-	// Create Windows-compatible temp directory path
 	tempDir := filepath.Join(os.TempDir(), "ansiblegitops", "repo")
 
 	gitClient, err := git.NewClient(

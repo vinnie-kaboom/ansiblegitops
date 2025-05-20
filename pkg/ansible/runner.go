@@ -21,12 +21,25 @@ func NewRunner(repoPath, playbookDir, inventoryFile string) *Runner {
 }
 
 func (r *Runner) RunPlaybooks() error {
-	playbookPath := filepath.Join(r.repoPath, r.playbookDir)
 	inventoryPath := filepath.Join(r.repoPath, r.inventoryFile)
+
+	// First check connectivity using ansible ping
+	log.Info().Msg("Verifying host connectivity with ansible ping")
+	pingCmd := exec.Command("ansible", "all", "-i", inventoryPath, "-m", "ping")
+	output, err := pingCmd.CombinedOutput()
+	if err != nil {
+		log.Error().Err(err).Str("output", string(output)).Msg("Host connectivity check failed")
+		return err
+	}
+	log.Info().Str("output", string(output)).Msg("Host connectivity check successful")
+
+	// Continue with playbook execution
+	playbookPath := filepath.Join(r.repoPath, r.playbookDir)
 	entries, err := filepath.Glob(filepath.Join(playbookPath, "*.yml"))
 	if err != nil {
 		return err
 	}
+
 	for _, playbook := range entries {
 		log.Info().Str("playbook", playbook).Msg("Running Ansible playbook")
 		cmd := exec.Command("ansible-playbook", "-i", inventoryPath, playbook)
