@@ -101,4 +101,5 @@ ansible:
  ## Observe Reconciliation:
 	•  Within 5 minutes (or sooner if you restart the service), the service will detect the new commit.
 	•  It will run the updated playbook, adding content to /tmp/testfile.txt.
-	•  Check the file:  cat /tmp/testfile.txt    
+	•  Check the file:  cat /tmp/testfile.txt  
+    
