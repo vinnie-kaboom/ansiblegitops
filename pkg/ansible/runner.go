@@ -1,11 +1,3 @@
-er.go
-Previous
-1of1
-Next
-Download
-Details
-Share via link
-Close
 package ansible
 
 import (
@@ -18,30 +10,6 @@ import (
 	"strings"
 	"time"
 )
-
-// Add this function to check Ansible installation
-func checkAnsibleInstallation() error {
-	cmd := exec.Command("ansible", "--version")
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("stderr", stderr.String()).
-			Msg("Ansible is not installed or not accessible")
-		return fmt.Errorf("ansible is not installed or not accessible: %w", err)
-	}
-
-	version := strings.Split(stdout.String(), "\n")[0]
-	log.Info().
-		Str("version", version).
-		Msg("Ansible installation verified")
-
-	return nil
-}
 
 type Runner struct {
 	repoPath    string
@@ -79,6 +47,30 @@ func (r *Runner) Init() error {
 		Msg("ansible-playbook command verified")
 
 	r.initialized = true
+	return nil
+}
+
+// Add this function to check Ansible installation
+func checkAnsibleInstallation() error {
+	cmd := exec.Command("ansible", "--version")
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	err := cmd.Run()
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("stderr", stderr.String()).
+			Msg("Ansible is not installed or not accessible")
+		return fmt.Errorf("ansible is not installed or not accessible: %w", err)
+	}
+
+	version := strings.Split(stdout.String(), "\n")[0]
+	log.Info().
+		Str("version", version).
+		Msg("Ansible installation verified")
+
 	return nil
 }
 
