@@ -110,6 +110,7 @@ func (a *App) setupAnsibleRunner() error {
 	rawAnsibleRunner, err := ansible.NewRunner(
 		a.gitClient.Path(),
 		a.cfg.Ansible.PlaybookDir,
+		a.cfg.Ansible.InventoryFile,
 	)
 	if err != nil {
 		return err
