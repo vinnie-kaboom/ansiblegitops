@@ -1,48 +1,72 @@
 package reconciler
 
 import (
-	"github.com/rs/zerolog/log"
-	"github.com/vinnie-kaboom/ansiblegitops/pkg/ansible"
-	"github.com/vinnie-kaboom/ansiblegitops/pkg/git"
+	"log"
+	"os"
 	"time"
 )
 
+type GitClient interface {
+	Pull() error
+	Path() string
+}
+
+type AnsibleRunner interface {
+	Run() error
+}
+
 type Reconciler struct {
-	gitClient  *git.Client
-	ansible    *ansible.Runner
-	lastCommit string
+	git     GitClient
+	ansible AnsibleRunner
 }
 
-func NewReconciler(gitClient *git.Client, ansibleRunner *ansible.Runner) *Reconciler {
+func NewReconciler(git GitClient, ansible AnsibleRunner) *Reconciler {
+	// Set up more verbose logging
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds | log.Lshortfile)
 	return &Reconciler{
-		gitClient: gitClient,
-		ansible:   ansibleRunner,
+		git:     git,
+		ansible: ansible,
 	}
-}
-
-func (r *Reconciler) Reconcile() error {
-	commit, changed, err := r.gitClient.Pull()
-	if err != nil {
-		return err
-	}
-	if !changed && commit == r.lastCommit {
-		log.Info().Msg("No changes in repository")
-		return nil
-	}
-	log.Info().Str("commit", commit).Msg("New commit detected, running playbooks")
-	if err := r.ansible.RunPlaybooks(); err != nil {
-		return err
-	}
-	r.lastCommit = commit
-	log.Info().Str("commit", commit).Msg("Reconciliation completed")
-	return nil
 }
 
 func (r *Reconciler) Run(interval time.Duration) {
+	log.Printf("Starting reconciliation loop with interval: %v", interval)
+	log.Printf("Git repository path: %s", r.git.Path())
+
+	// Check if we have necessary permissions
+	if err := os.MkdirAll("/tmp", 0755); err != nil {
+		log.Printf("Warning: Failed to verify /tmp directory permissions: %v", err)
+	}
+
 	for {
-		if err := r.Reconcile(); err != nil {
-			log.Error().Err(err).Msg("Reconciliation failed")
+		log.Println("Beginning reconciliation cycle")
+
+		log.Println("Pulling latest changes from Git repository")
+		if err := r.git.Pull(); err != nil {
+			log.Printf("Error pulling repository: %v", err)
+			time.Sleep(interval)
+			continue
 		}
+		log.Println("Git pull completed successfully")
+
+		log.Println("Running Ansible playbook")
+		if err := r.ansible.Run(); err != nil {
+			log.Printf("Error running Ansible playbook: %v", err)
+			time.Sleep(interval)
+			continue
+		}
+		log.Println("Ansible playbook completed successfully")
+
+		// Verify file creation
+		if _, err := os.Stat("/tmp/testfile.txt"); os.IsNotExist(err) {
+			log.Printf("Warning: /tmp/testfile.txt was not created after playbook run")
+		} else if err == nil {
+			log.Printf("Success: /tmp/testfile.txt exists")
+		} else {
+			log.Printf("Error checking /tmp/testfile.txt: %v", err)
+		}
+
+		log.Printf("Reconciliation cycle completed. Waiting %v before next cycle", interval)
 		time.Sleep(interval)
 	}
 }
