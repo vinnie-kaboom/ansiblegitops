@@ -36,4 +36,5 @@ func main() {
 	repoReconciler := reconciler.NewReconciler(gitClient, ansibleRunner)
 	interval := time.Duration(cfg.Git.PollInterval) * time.Second
 	repoReconciler.Run(interval)
+
 }
