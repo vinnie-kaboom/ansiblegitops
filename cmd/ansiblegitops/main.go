@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"github.com/vinnie-kaboom/ansiblegitops/pkg/ansible"
 	"github.com/vinnie-kaboom/ansiblegitops/pkg/config"
 	"github.com/vinnie-kaboom/ansiblegitops/pkg/git"
@@ -11,70 +12,136 @@ import (
 	"time"
 )
 
-func init() {
-	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+const (
+	tempDirName    = "ansiblegitops"
+	repoDirName    = "repo"
+	dirPermissions = 0755
+)
+
+type AppError struct {
+	Stage string
+	Err   error
 }
 
-func main() {
-	log.Println("Starting ansiblegitops...")
+func (e *AppError) Error() string {
+	return fmt.Sprintf("%s: %v", e.Stage, e.Err)
+}
+
+type App struct {
+	cfg            *config.Config
+	gitClient      reconciler.GitClient
+	ansibleRunner  reconciler.AnsibleRunner
+	repoReconciler *reconciler.Reconciler
+	tempDir        string
+}
+
+func NewApp() *App {
+	return &App{}
+}
+
+func (a *App) Initialize() error {
+	if err := a.setupLogging(); err != nil {
+		return &AppError{"logging setup", err}
+	}
+
+	if err := a.loadConfig(); err != nil {
+		return &AppError{"config loading", err}
+	}
+
+	if err := a.setupTempDir(); err != nil {
+		return &AppError{"temp directory setup", err}
+	}
+
+	if err := a.setupGitClient(); err != nil {
+		return &AppError{"git client setup", err}
+	}
+
+	if err := a.setupAnsibleRunner(); err != nil {
+		return &AppError{"ansible runner setup", err}
+	}
+
+	a.setupReconciler()
+	return nil
+}
+
+func (a *App) setupLogging() error {
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	pwd, err := os.Getwd()
 	if err != nil {
 		log.Printf("Warning: Cannot get working directory: %v", err)
 	} else {
 		log.Printf("Current working directory: %s", pwd)
 	}
-
-	// Load configuration
-	log.Println("Loading configuration...")
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
-	}
-	log.Printf("Configuration loaded successfully: Git URL: %s, Branch: %s, Playbook Dir: %s",
-		cfg.Git.URL, cfg.Git.Branch, cfg.Ansible.PlaybookDir)
-
-	tempDir := filepath.Join(os.TempDir(), "ansiblegitops", "repo")
-	log.Printf("Using temporary directory: %s", tempDir)
-
-	// Create temp directory if it doesn't exist
-	if err := os.MkdirAll(tempDir, 0755); err != nil {
-		log.Fatalf("Failed to create temporary directory: %v", err)
-	}
-
-	log.Println("Initializing Git client...")
-	rawGitClient, err := git.NewClient(
-		cfg.Git.URL,
-		cfg.Git.Branch,
-		tempDir,
-	)
-	if err != nil {
-		log.Fatalf("Failed to initialize Git client: %v", err)
-	}
-
-	// Wrap the git client to match the interface
-	gitClient := &gitClientWrapper{rawGitClient}
-	log.Println("Git client initialized successfully")
-
-	log.Println("Setting up Ansible runner...")
-	rawAnsibleRunner, err := ansible.NewRunner(
-		gitClient.Path(),
-		cfg.Ansible.PlaybookDir,
-	)
-	if err != nil {
-		log.Fatalf("Failed to set up Ansible runner: %v", err)
-	}
-	// Wrap the ansible runner to match the interface
-	ansibleRunner := &ansibleRunnerWrapper{rawAnsibleRunner}
-	log.Println("Ansible runner configured")
-
-	log.Println("Creating repository reconciler...")
-	repoReconciler := reconciler.NewReconciler(gitClient, ansibleRunner)
-	interval := time.Duration(cfg.Git.PollInterval) * time.Second
-	log.Printf("Starting reconciliation loop with interval: %v", interval)
-
-	repoReconciler.Run(interval)
+	return nil
 }
 
+func (a *App) loadConfig() error {
+	var err error
+	a.cfg, err = config.Load()
+	if err != nil {
+		return fmt.Errorf("failed to load config: %w", err)
+	}
+	log.Printf("Configuration loaded successfully: Git URL: %s, Branch: %s, Playbook Dir: %s",
+		a.cfg.Git.URL, a.cfg.Git.Branch, a.cfg.Ansible.PlaybookDir)
+	return nil
+}
+
+func (a *App) setupTempDir() error {
+	a.tempDir = filepath.Join(os.TempDir(), tempDirName, repoDirName)
+	log.Printf("Using temporary directory: %s", a.tempDir)
+	return os.MkdirAll(a.tempDir, dirPermissions)
+}
+
+func (a *App) setupGitClient() error {
+	rawGitClient, err := git.NewClient(
+		a.cfg.Git.URL,
+		a.cfg.Git.Branch,
+		a.tempDir,
+	)
+	if err != nil {
+		return err
+	}
+	a.gitClient = &gitClientWrapper{rawGitClient}
+	log.Println("Git client initialized successfully")
+	return nil
+}
+
+func (a *App) setupAnsibleRunner() error {
+	rawAnsibleRunner, err := ansible.NewRunner(
+		a.gitClient.Path(),
+		a.cfg.Ansible.PlaybookDir,
+	)
+	if err != nil {
+		return err
+	}
+	a.ansibleRunner = &ansibleRunnerWrapper{rawAnsibleRunner}
+	log.Println("Ansible runner configured")
+	return nil
+}
+
+func (a *App) setupReconciler() {
+	a.repoReconciler = reconciler.NewReconciler(a.gitClient, a.ansibleRunner)
+	log.Println("Repository reconciler created")
+}
+
+func (a *App) Run() {
+	interval := time.Duration(a.cfg.Git.PollInterval) * time.Second
+	log.Printf("Starting reconciliation loop with interval: %v", interval)
+	a.repoReconciler.Run(interval)
+}
+
+func main() {
+	log.Println("Starting ansiblegitops...")
+
+	app := NewApp()
+	if err := app.Initialize(); err != nil {
+		log.Fatalf("Failed to initialize application: %v", err)
+	}
+
+	app.Run()
+}
+
+// Wrapper types remain unchanged
 type gitClientWrapper struct {
 	*git.Client
 }
