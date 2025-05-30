@@ -11,3 +11,4 @@ git:
 ansible:
   playbook_dir: "${PLAYBOOK_DIR}"
   inventory_file: "${INVENTORY_FILE}"
+  
