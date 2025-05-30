@@ -1,0 +1,13 @@
+---
+# Git Repository Settings
+git:
+  url: "${ANSIBLE_REPO_URL}"
+  branch: "${GIT_BRANCH}"
+  poll_interval: 300
+  auth:
+    type: "token"
+    username: "${GITHUB_USERNAME}"
+    token: "${GITHUB_TOKEN}"
+ansible:
+  playbook_dir: "${PLAYBOOK_DIR}"
+  inventory_file: "${INVENTORY_FILE}"
