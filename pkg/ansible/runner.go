@@ -3,12 +3,13 @@ package ansible
 import (
 	"bytes"
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 // Add this function to check Ansible installation
