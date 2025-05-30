@@ -1,64 +1,118 @@
 package config
 
 import (
-	"gopkg.in/yaml.v2"
+	"fmt"
 	"os"
+	"reflect"
 	"strings"
+
+	"gopkg.in/yaml.v2"
 )
 
-// Config is a structure that holds the application's configuration settings.
-// It contains nested structures for Git and Ansible configurations, including
-// authentication details, repository settings, and playbook locations.
-// All fields are mapped to corresponding YAML tags for configuration file
 type Config struct {
 	Git struct {
-		URL          string `yaml:"url"`
-		Branch       string `yaml:"branch"`
-		PollInterval int    `yaml:"poll_interval"`
+		URL          string `yaml:"url" validate:"required"`
+		Branch       string `yaml:"branch" validate:"required"`
+		PollInterval int    `yaml:"poll_interval" validate:"gt=0"`
 		Auth         struct {
-			Type     string `yaml:"type"`
-			Username string `yaml:"username"`
-			Token    string `yaml:"token"`
+			Type     string `yaml:"type" validate:"required"`
+			Username string `yaml:"username" validate:"required"`
+			Token    string `yaml:"token" validate:"required"`
 		} `yaml:"auth"`
 	} `yaml:"git"`
 	Ansible struct {
-		PlaybookDir   string `yaml:"playbook_dir"`
-		InventoryFile string `yaml:"inventory_file"`
+		PlaybookDir   string `yaml:"playbook_dir" validate:"required"`
+		InventoryFile string `yaml:"inventory_file" validate:"required"`
 	} `yaml:"ansible"`
 }
 
-// Load reads and parses the configuration from config.yaml file.
-// It processes environment variables in the configuration content,
-// replacing ${VAR_NAME} placeholders with their actual values.
-// Returns a pointer to the Config structure and any error encountered
-// during loading or parsing.
+// Validate checks if all required configuration values are set
+func (c *Config) Validate() error {
+	var errMsgs []string
+
+	// Helper function to validate a value based on its validation tag
+	validateField := func(value reflect.Value, field reflect.StructField, path string) {
+		tag := field.Tag.Get("validate")
+		if tag == "" {
+			return
+		}
+
+		switch tag {
+		case "required":
+			if value.Kind() == reflect.String && value.String() == "" {
+				errMsgs = append(errMsgs, fmt.Sprintf("%s is required", path))
+			}
+		case "gt=0":
+			if value.Kind() == reflect.Int && value.Int() <= 0 {
+				errMsgs = append(errMsgs, fmt.Sprintf("%s must be greater than 0", path))
+			}
+		}
+	}
+
+	// Recursively validate all fields
+	var validateStruct func(v reflect.Value, path string)
+	validateStruct = func(v reflect.Value, path string) {
+		if v.Kind() == reflect.Ptr {
+			v = v.Elem()
+		}
+		if v.Kind() != reflect.Struct {
+			return
+		}
+
+		t := v.Type()
+		for i := 0; i < v.NumField(); i++ {
+			field := t.Field(i)
+			value := v.Field(i)
+			fieldPath := path
+			if fieldPath != "" {
+				fieldPath += "."
+			}
+			fieldPath += strings.ToLower(field.Name)
+
+			if value.Kind() == reflect.Struct {
+				validateStruct(value, fieldPath)
+			} else {
+				validateField(value, field, fieldPath)
+			}
+		}
+	}
+
+	validateStruct(reflect.ValueOf(c), "")
+
+	if len(errMsgs) > 0 {
+		return fmt.Errorf("validation failed: %s", strings.Join(errMsgs, "; "))
+	}
+	return nil
+}
+
+// Load reads configuration from config.yaml and processes environment variables
 func Load() (*Config, error) {
-	// 1. Initialize empty configuration
 	cfg := &Config{}
 
-	// 2. Read configuration file
 	data, err := os.ReadFile("config.yaml")
 	if err != nil {
 		return nil, err
 	}
 
-	// 3. Process environment variables
+	// Replace environment variables in the yaml content
 	content := string(data)
 	for _, env := range os.Environ() {
 		parts := strings.SplitN(env, "=", 2)
 		if len(parts) == 2 {
-			// 4. Replace environment variables placeholders
 			placeholder := "${" + parts[0] + "}"
 			content = strings.Replace(content, placeholder, parts[1], -1)
 		}
 	}
 
-	// 5. Parse YAML content into configuration structure
 	err = yaml.Unmarshal([]byte(content), cfg)
 	if err != nil {
 		return nil, err
 	}
 
-	// 6. Return parsed configuration
+	// Validate the configuration
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
+
 	return cfg, nil
 }
