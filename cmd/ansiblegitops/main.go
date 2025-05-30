@@ -80,9 +80,8 @@ type gitClientWrapper struct {
 	*git.Client
 }
 
-func (w *gitClientWrapper) Pull() error {
-	_, _, err := w.Client.Pull()
-	return err
+func (w *gitClientWrapper) Pull() (string, bool, error) {
+	return w.Client.Pull()
 }
 
 type ansibleRunnerWrapper struct {

@@ -7,7 +7,7 @@ import (
 )
 
 type GitClient interface {
-	Pull() error
+	Pull() (string, bool, error)
 	Path() string
 }
 
@@ -42,12 +42,18 @@ func (r *Reconciler) Run(interval time.Duration) {
 		log.Println("Beginning reconciliation cycle")
 
 		log.Println("Pulling latest changes from Git repository")
-		if err := r.git.Pull(); err != nil {
+		commit, changed, err := r.git.Pull()
+		if err != nil {
 			log.Printf("Error pulling repository: %v", err)
 			time.Sleep(interval)
 			continue
 		}
-		log.Println("Git pull completed successfully")
+
+		if changed {
+			log.Printf("Repository was recreated or updated. Commit: %s", commit)
+		} else {
+			log.Println("Git pull completed successfully")
+		}
 
 		log.Println("Running Ansible playbook")
 		if err := r.ansible.Run(); err != nil {

@@ -1,14 +1,13 @@
 ---
 # Git Repository Settings
 git:
-  url: "${ANSIBLE_REPO_URL}"
-  branch: "${GIT_BRANCH}"
+  url: "https://github.com/vinnie-kaboom/ansible-repo"
+  branch: "main"
   poll_interval: 300
   auth:
     type: "token"
-    username: "${GITHUB_USERNAME}"
-    token: "${GITHUB_TOKEN}"
+    username: "vinnie-kaboom"
+    token: "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"
 ansible:
-  playbook_dir: "${PLAYBOOK_DIR}"
-  inventory_file: "${INVENTORY_FILE}"
-  
+  playbook_dir: "playbooks"
+  inventory_file: "inventory"
